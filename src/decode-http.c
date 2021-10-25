@@ -8,8 +8,11 @@ httprequest *parseRequest(u_char *requestText) {
 	char key[256];
 	char val[1024];
 	if (requestText == NULL || requestText[0]=='\0') return NULL;
+	
+	char tmp[2048];
+	strncpy(tmp, requestText, strlen(requestText));
 	char *token = NULL;
-	token = strtok(requestText, " ");
+	token = strtok(tmp," ");
 	char valid = 0;
 	
 	if (!strncmp(token,"GET",strlen(token)) || !strncmp(token,"POST",strlen(token)) || !strncmp(token,"PUT",strlen(token)) || !strncmp(token,"DELETE",strlen(token)))   {
@@ -22,7 +25,6 @@ httprequest *parseRequest(u_char *requestText) {
 	memset(request, 0x00, sizeof(httprequest));
 	strncpy(request->method, token, strlen(token));
 	token = strtok(NULL, "\n");
-	token[strlen(token)-1] = '\0';
 	
 	while (token) {
 		memset(key, 0x00, sizeof(key));
@@ -32,9 +34,9 @@ httprequest *parseRequest(u_char *requestText) {
 		strncpy(key, token, strlen(token));
 		token = strtok(NULL,"\r\n");
 		if (!token) break;
-		strncpy(val, token+1, strlen(token)-1);
+		strncpy(val, token+1, strlen(token)-1);	// Skip space after :
 		if (!strncmp(key,"Host",strlen(token))) {
-			strncpy(request->host, val+1, strlen(val));	// skip space character
+			strncpy(request->host, val, strlen(val));	// skip space character
 			break;
 		}
 	}

