@@ -7,4 +7,4 @@ typedef struct AttackConfig_ {
 	char interface[64];
 } AttackConfig;
 
-AttackConfig *parseConfig(char const *argv[]);
+AttackConfig *parseConfig(int argc, char const *argv[]);

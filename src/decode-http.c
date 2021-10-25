@@ -4,7 +4,10 @@
 #include "decode-http.h"
 
 
-httprequest *parseRequest(char *requestText) {
+httprequest *parseRequest(u_char *requestText) {
+	char key[256];
+	char val[1024];
+	if (requestText == NULL || requestText[0]=='\0') return NULL;
 	char *token = NULL;
 	token = strtok(requestText, " ");
 	char valid = 0;
@@ -19,26 +22,21 @@ httprequest *parseRequest(char *requestText) {
 	memset(request, 0x00, sizeof(httprequest));
 	strncpy(request->method, token, strlen(token));
 	token = strtok(NULL, "\n");
-	if (token) {
-		token = strtok(NULL, ":");
-	}
+	token[strlen(token)-1] = '\0';
 	
 	while (token) {
-		if (!strncmp(token,"Host",strlen(token))) {
-			token = strtok(NULL,"\n");
-			strncpy(request->host, token, strlen(token));
-			//printf("%d", strlen(token));
+		memset(key, 0x00, sizeof(key));
+		memset(val, 0x00, sizeof(val));
+		token = strtok(NULL, ":");
+		if (!token) break;
+		strncpy(key, token, strlen(token));
+		token = strtok(NULL,"\r\n");
+		if (!token) break;
+		strncpy(val, token+1, strlen(token)-1);
+		if (!strncmp(key,"Host",strlen(token))) {
+			strncpy(request->host, val+1, strlen(val));	// skip space character
+			break;
 		}
-		token = strtok(NULL,":");
 	}
 	return request;
-}
-
-int main() {
-	char requestText[] = "GETS / HTTP/1.1\nHost:google.com\n";
-	httprequest *request = parseRequest(requestText);
-	if (!request) {
-		printf("Invalid request!");
-	}
-	else printf("method:%s\nhost:%s",request->method, request->host);
 }
