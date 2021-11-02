@@ -4,7 +4,7 @@
 #include "decode-http.h"
 
 
-httprequest *parseRequest(u_char *requestText) {
+httprequest *parseRequest(char *requestText) {
 	char key[256];
 	char val[1024];
 	if (requestText == NULL || requestText[0]=='\0') return NULL;

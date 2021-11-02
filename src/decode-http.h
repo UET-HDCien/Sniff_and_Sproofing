@@ -13,4 +13,4 @@ typedef struct httprespond_ {
 	int statusCode;
 } httprespond;
 
-httprequest * parseRequest(u_char *requestText);
+httprequest * parseRequest(char *requestText);

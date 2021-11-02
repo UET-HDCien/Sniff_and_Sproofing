@@ -13,11 +13,3 @@ typedef struct tcpheader_
     uint16_t th_urp;    /**< urgent pointer */
 } tcpheader;
 
-typedef struct pseudo_tcp_ {
-	unsigned saddr, daddr;
-	unsigned char mbz;
-	unsigned char ptcl;
-	unsigned short tcpl;
-	tcpheader tcp;
-	char payload[1500];
-} pseudo_tcp;
