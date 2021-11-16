@@ -1,9 +1,8 @@
-
+#define MAX_HOST_LEN 256
 typedef struct AttackConfig_ {
-	char target_src[256];
-	unsigned short target_srcport;
-	char target_dst[256];
-	unsigned short target_dstport;
+	char dst[256];
+	unsigned short dport;
+	char host[MAX_HOST_LEN];
 	char interface[64];
 } AttackConfig;
 

@@ -5,11 +5,11 @@
 
 void printConfig() {
 	printf("================================================ \n");
-	printf("Usage: kien -i interface <optional parameter> \n");
+	printf("Usage: kien -i interface <option> <parameter> \n");
 	printf("--dst: Destination IP to capture packet and sproof \n");
-	printf("--dst-port: Destination port to capture packet and sproof \n");
+	printf("--dport: Destination port to capture packet and sproof \n");
 	printf("--host: Destination host (in HTTP Request) to capture packet and sproof \n");
-	printf("--src: Source IP to capture request and sproof respond\n");
+	printf("Example: kien -i eth0 --host abc.xyz\n");
 }
 
 AttackConfig *parseConfig(int argc, char const *argv[]) {
@@ -17,19 +17,15 @@ AttackConfig *parseConfig(int argc, char const *argv[]) {
 	memset(config, 0x00, sizeof(AttackConfig));
 	int i = 1;
 	while (i < argc-1) {
-		if (!strncmp(argv[i],"--dst", strlen(argv[i]))) {
-			strncpy(config->target_dst, argv[i+1], sizeof(config->target_dst));
-		} else if (!strncmp(argv[i],"--src", strlen(argv[i]))) {
-			strncpy(config->target_src,argv[i+1],sizeof(config->target_src));
-		} else if (!strncmp(argv[i],"--dst-port", strlen(argv[i]))) {
-			config->target_dstport = (unsigned short) strtoul(argv[i+1], NULL, 0);
-		} else if (!strncmp(argv[i],"--src-port", strlen(argv[i]))) {
-			config->target_srcport = (unsigned short) strtoul(argv[i+1], NULL, 0);
-		} else if (!strncmp(argv[i],"-i", strlen(argv[i]))) {
+		if (!strcmp(argv[i],"--dst")) {
+			strncpy(config->dst, argv[i+1], sizeof(config->dst));
+		} else if (!strcmp(argv[i],"--dport")) {
+			config->dport = (unsigned short) strtoul(argv[i+1], NULL, 0);
+		} else if (!strcmp(argv[i],"-i")) {
 			strncpy(config->interface, argv[i+1], sizeof(config->interface));
-		} else if (!strncmp(argv[i],"--host", strlen(argv[i]))) {
-			strncpy(config->target_dst, argv[i+1], sizeof(config->target_dst));
-		} else if (!strncmp(argv[i],"-h", strlen(argv[i]))) {
+		} else if (!strcmp(argv[i],"--host")) {
+			strncpy(config->host, argv[i+1], sizeof(config->host));
+		} else if (!strcmp(argv[i],"--help")) {
 			printConfig();
 			i += 1;
 			continue;

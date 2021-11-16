@@ -5,17 +5,17 @@
 
 
 httprequest *parseRequest(char *requestText) {
+	if (requestText == NULL || requestText[0]=='\0') return NULL;
+	//printf("len %ld\n",strlen(requestText));
 	char key[256];
 	char val[1024];
-	if (requestText == NULL || requestText[0]=='\0') return NULL;
-	
 	char tmp[2048];
-	strncpy(tmp, requestText, strlen(requestText));
+	strncpy(tmp, requestText, sizeof(tmp));
 	char *token = NULL;
 	token = strtok(tmp," ");
 	char valid = 0;
 	
-	if (!strncmp(token,"GET",strlen(token)) || !strncmp(token,"POST",strlen(token)) || !strncmp(token,"PUT",strlen(token)) || !strncmp(token,"DELETE",strlen(token)))   {
+	if (!strcmp(token,"GET") || !strcmp(token,"POST") || !strcmp(token,"PUT") || !strcmp(token,"DELETE"))   {
 		valid = 1;
 	}
 	if (!valid) return NULL; 

