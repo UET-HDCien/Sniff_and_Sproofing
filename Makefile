@@ -4,8 +4,9 @@ BIN_DIR := ./
 OBJ_DIR := obj
 CFLAGS   := -Wall
 LDLIBS   := -lpcap
+TARGET	:= kien
 
-EXE := $(BIN_DIR)/kien
+EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)
 OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
@@ -25,7 +26,7 @@ $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
 
 clean:
-	@$(RM) -rv $(OBJ_DIR)
+	@$(RM) -rv $(OBJ_DIR) $(TARGET)
 
 -include $(OBJ:.o=.d)
 

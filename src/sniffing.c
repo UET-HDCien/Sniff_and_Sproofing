@@ -67,12 +67,7 @@ void spoof_reply_http(ipheader *ip) {
 	/* New ACK number= received sequence number + TCP payload length */
 	uint8_t TCP_HEADER_LEN2 =  tcpReceive->th_offx2 >> 4;
 	TCP_HEADER_LEN2 = TCP_HEADER_LEN2 * 4;
-	//u_char *payloadReceive = (u_char *) ((u_char *)tcpReceive + TCP_HEADER_LEN2);
-	
-	//uint32_t payloadLen = strlen((char *) payloadReceive);
 	uint32_t payloadLen = ntohs(ip->iph_len) - IP_HEADER_LEN - TCP_HEADER_LEN2;
-	//printf("%02x \n",payloadReceive[0]);
-	//printf("%02x \n",payloadReceive[payloadLen -1]);
 	tcpSend -> th_ack = htonl(ntohl(tcpReceive -> th_seq) + payloadLen); 
 
 	printf("payload length %" PRIu32 "\n", payloadLen);
@@ -98,7 +93,6 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	if (ntohs(eth-> ether_type) == 0x0800) {	// ip packet
 		ipheader *ip = (ipheader *) ((u_char *)packet + ETHERNET_HEADER_LEN);
 		int IP_HEADER_LEN = ip -> iph_ihl * 4;
-		//int IP_HEADER_LEN  = 20;
 		switch (ip->iph_proto) {
 			case IPPROTO_TCP:	;// TCP protocol
 				//printf("TCP\n");
@@ -111,18 +105,13 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				else if (config->dst[0] != '\0') {
 					char str[INET_ADDRSTRLEN];
 					inet_ntop(AF_INET, &(ip->iph_dstip), str, INET_ADDRSTRLEN);
-					//printf("Extract IP %s\n", str);
-					if (strcmp(str, config->dst)) match = 0;
-					//else printf("Match!!\n");				
+					if (strcmp(str, config->dst)) match = 0;				
 				}
 				if (match && data != NULL && strlen((char *) data) > 10) {
-					//printf("Parse HTTP\n");
 					httprequest *request = parseRequest(data);
-					//printf("Parse HTTP2\n");
 					if (request != NULL && request->host != NULL) {
 						if (config->host[0] != '\0' && strcmp(request->host, config->host)) match = 0;
 						if (match) {
-							//printf("Fake respond!\n");
 							spoof_reply_http(ip);
 						}
 
